@@ -36,6 +36,12 @@
 #include "avio_internal.h"
 #include "url.h"
 
+#if ANDROID
+#include <android/log.h>
+
+#define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, "FFMPEG",  __VA_ARGS__);
+#endif
+
 #define INITIAL_BUFFER_SIZE 32768
 
 /*
@@ -343,6 +349,8 @@ static int open_input(HLSContext *c, struct variant *var)
     AVDictionary *opts = NULL;
     int ret;
     struct segment *seg = var->segments[var->cur_seq_no - var->start_seq_no];
+
+    LOGD("open_input url: %s", seg->url);
 
     // broker prior HTTP options that should be consistent across requests
     av_dict_set(&opts, "user-agent", c->user_agent, 0);
@@ -762,6 +770,7 @@ static int hls_read_seek(AVFormatContext *s, int stream_index,
     HLSContext *c = s->priv_data;
     int i, j, ret;
 
+
     if ((flags & AVSEEK_FLAG_BYTE) || !c->variants[0]->finished)
         return AVERROR(ENOSYS);
 
@@ -775,6 +784,10 @@ static int hls_read_seek(AVFormatContext *s, int stream_index,
                                s->streams[stream_index]->time_base.den :
                                AV_TIME_BASE, flags & AVSEEK_FLAG_BACKWARD ?
                                AV_ROUND_DOWN : AV_ROUND_UP);
+
+
+    LOGD("hls_read_seek ts %lld seek ts %lld", timestamp, c->seek_timestamp);
+
     if (s->duration < c->seek_timestamp) {
         c->seek_timestamp = AV_NOPTS_VALUE;
         return AVERROR(EIO);
@@ -784,12 +797,9 @@ static int hls_read_seek(AVFormatContext *s, int stream_index,
     for (i = 0; i < c->n_variants; i++) {
         /* Reset reading */
         struct variant *var = c->variants[i];
-        int64_t pos = c->first_timestamp == AV_NOPTS_VALUE ? 0 :
-                      av_rescale_rnd(c->first_timestamp, AV_TIME_BASE, stream_index >= 0 ?
-                               s->streams[stream_index]->time_base.den :
-                               AV_TIME_BASE, flags & AVSEEK_FLAG_BACKWARD ?
-                               AV_ROUND_DOWN : AV_ROUND_UP);
-         if (var->input) {
+        int64_t pos = c->first_timestamp == AV_NOPTS_VALUE ?
+                      0 : c->first_timestamp;
+        if (var->input) {
             ffurl_close(var->input);
             var->input = NULL;
         }
@@ -803,6 +813,7 @@ static int hls_read_seek(AVFormatContext *s, int stream_index,
 
         /* Locate the segment that contains the target timestamp */
         for (j = 0; j < var->n_segments; j++) {
+            // LOGD("TS %lld VAR %d SEG %d", timestamp, i, j);
             if (timestamp >= pos &&
                 timestamp < pos + var->segments[j]->duration) {
                 var->cur_seq_no = var->start_seq_no + j;

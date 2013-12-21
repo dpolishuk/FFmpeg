@@ -32,6 +32,13 @@
 #include "url.h"
 #include "version.h"
 
+
+#if ANDROID
+#include <android/log.h>
+
+#define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, "FFMPEG-Proto",  __VA_ARGS__);
+#endif
+
 /*
  * An apple http stream consists of a playlist with media segment files,
  * played sequentially. There may be several playlists with the same
@@ -115,6 +122,8 @@ static int parse_playlist(URLContext *h, const char *url)
     int64_t duration = 0;
     char line[1024];
     const char *ptr;
+
+    LOGD("parse_playlist url: %s", url);
 
     if ((ret = avio_open2(&in, url, AVIO_FLAG_READ,
                           &h->interrupt_callback, NULL)) < 0)
