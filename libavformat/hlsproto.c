@@ -26,17 +26,25 @@
  */
 
 #include "libavutil/avstring.h"
+// #include "libavutil/time.h"
 #include "avformat.h"
 #include "internal.h"
 #include "url.h"
 #include "version.h"
+
 #include <unistd.h>
+
+#if ANDROID
+#include <android/log.h>
+
+#define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, "FFMPEG-Proto",  __VA_ARGS__);
+#endif
 
 /*
  * An apple http stream consists of a playlist with media segment files,
  * played sequentially. There may be several playlists with the same
  * video content, in different bandwidth variants, that are played in
- * parallel (preferrably only one bandwidth variant at a time). In this case,
+ * parallel (preferably only one bandwidth variant at a time). In this case,
  * the user supplied the url to a main playlist that only lists the variant
  * playlists.
  *
@@ -45,7 +53,7 @@
  */
 
 struct segment {
-    int duration;
+    int64_t duration;
     char url[MAX_URL_SIZE];
 };
 
@@ -56,7 +64,7 @@ struct variant {
 
 typedef struct HLSContext {
     char playlisturl[MAX_URL_SIZE];
-    int target_duration;
+    int64_t target_duration;
     int start_seq_no;
     int finished;
     int n_segments;
@@ -111,9 +119,12 @@ static int parse_playlist(URLContext *h, const char *url)
 {
     HLSContext *s = h->priv_data;
     AVIOContext *in;
-    int ret = 0, duration = 0, is_segment = 0, is_variant = 0, bandwidth = 0;
+    int ret = 0, is_segment = 0, is_variant = 0, bandwidth = 0;
+    int64_t duration = 0;
     char line[1024];
     const char *ptr;
+
+    LOGD("parse_playlist url: %s", url);
 
     if ((ret = avio_open2(&in, url, AVIO_FLAG_READ,
                           &h->interrupt_callback, NULL)) < 0)
@@ -134,14 +145,14 @@ static int parse_playlist(URLContext *h, const char *url)
                                &info);
             bandwidth = atoi(info.bandwidth);
         } else if (av_strstart(line, "#EXT-X-TARGETDURATION:", &ptr)) {
-            s->target_duration = atoi(ptr);
+            s->target_duration = atoi(ptr) * AV_TIME_BASE;
         } else if (av_strstart(line, "#EXT-X-MEDIA-SEQUENCE:", &ptr)) {
             s->start_seq_no = atoi(ptr);
         } else if (av_strstart(line, "#EXT-X-ENDLIST", &ptr)) {
             s->finished = 1;
         } else if (av_strstart(line, "#EXTINF:", &ptr)) {
             is_segment = 1;
-            duration = atoi(ptr);
+            duration = atof(ptr) * AV_TIME_BASE;
         } else if (av_strstart(line, "#", NULL)) {
             continue;
         } else if (line[0]) {
@@ -204,19 +215,6 @@ static int hls_open(URLContext *h, const char *uri, int flags)
                nested_url);
         ret = AVERROR(EINVAL);
         goto fail;
-#if FF_API_APPLEHTTP_PROTO
-    } else if (av_strstart(uri, "applehttp+", &nested_url)) {
-        av_strlcpy(s->playlisturl, nested_url, sizeof(s->playlisturl));
-        av_log(h, AV_LOG_WARNING,
-               "The applehttp protocol is deprecated, use hls+%s as url "
-               "instead.\n", nested_url);
-    } else if (av_strstart(uri, "applehttp://", &nested_url)) {
-        av_strlcpy(s->playlisturl, "http://", sizeof(s->playlisturl));
-        av_strlcat(s->playlisturl, nested_url, sizeof(s->playlisturl));
-        av_log(h, AV_LOG_WARNING,
-               "The applehttp protocol is deprecated, use hls+http://%s as url "
-               "instead.\n", nested_url);
-#endif
     } else {
         av_log(h, AV_LOG_ERROR, "Unsupported url %s\n", uri);
         ret = AVERROR(EINVAL);
@@ -283,7 +281,6 @@ start:
     reload_interval = s->n_segments > 0 ?
                       s->segments[s->n_segments - 1]->duration :
                       s->target_duration;
-    reload_interval *= 1000000;
 retry:
     if (!s->finished) {
         int64_t now = av_gettime();
@@ -293,7 +290,7 @@ retry:
             /* If we need to reload the playlist again below (if
              * there's still no more segments), switch to a reload
              * interval of half the target duration. */
-            reload_interval = s->target_duration * 500000;
+            reload_interval = s->target_duration / 2;
         }
     }
     if (s->cur_seq_no < s->start_seq_no) {
