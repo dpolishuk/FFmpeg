@@ -668,6 +668,7 @@ static int hls_read_packet(AVFormatContext *s, AVPacket *pkt)
 {
     HLSContext *c = s->priv_data;
     int ret, i, minvariant = -1;
+    int found = 0;
 
     if (c->first_packet) {
         recheck_discard_flags(s, 1);
@@ -712,6 +713,9 @@ start:
                           c->seek_timestamp;
                 if (ts_diff >= 0 && (c->seek_flags  & AVSEEK_FLAG_ANY ||
                                      var->pkt.flags & AV_PKT_FLAG_KEY)) {
+                    LOGD("HLS finish SEEK %d", var->pkt.flags & AV_PKT_FLAG_KEY);
+                    LOGD("HLS find key frame %lld", var->pkt.dts);
+                    found = 1;
                     c->seek_timestamp = AV_NOPTS_VALUE;
                     break;
                 }
@@ -753,6 +757,9 @@ start:
     /* If we got a packet, return it */
     if (minvariant >= 0) {
         *pkt = c->variants[minvariant]->pkt;
+        if (found > 0) {
+          LOGD("HLS packet %lld", pkt->dts);
+        }
         pkt->stream_index += c->variants[minvariant]->stream_offset;
         reset_packet(&c->variants[minvariant]->pkt);
         return 0;
@@ -796,7 +803,7 @@ static int hls_read_seek(AVFormatContext *s, int stream_index,
                                AV_TIME_BASE, flags & AVSEEK_FLAG_BACKWARD ?
                                AV_ROUND_DOWN : AV_ROUND_UP);
 
-    LOGD("hls_read_seek ts %lld seek ts %lld", timestamp, c->seek_timestamp);
+    LOGD("HLS hls_read_seek ts %lld seek ts %lld", timestamp, c->seek_timestamp);
 
     ret = AVERROR(EIO);
     for (i = 0; i < c->n_variants; i++) {

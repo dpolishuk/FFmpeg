@@ -19,7 +19,7 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-//#define USE_SYNCPOINT_SEARCH
+#define USE_SYNCPOINT_SEARCH
 
 #include "libavutil/crc.h"
 #include "libavutil/intreadwrite.h"
@@ -37,6 +37,14 @@
 #include "seek.h"
 #include "mpeg.h"
 #include "isom.h"
+
+#if ANDROID
+#include <android/log.h>
+
+#define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, "FFMPEG",  __VA_ARGS__);
+#else
+#define LOGD(...)
+#endif
 
 /* maximum size in which we look for synchronisation if
    synchronisation is lost */
@@ -2185,6 +2193,8 @@ static int read_seek2(AVFormatContext *s,
     AVStream *st;
     AVParserState *backup;
 
+//    LOGD("MPEG2TS read_seek2 %lld", target_ts);
+
     backup = ff_store_parser_state(s);
 
     // detect direction of seeking for search purposes
@@ -2237,6 +2247,7 @@ static int read_seek2(AVFormatContext *s,
 
 static int read_seek(AVFormatContext *s, int stream_index, int64_t target_ts, int flags)
 {
+//    LOGD("MPEG2TS read_seek %lld", target_ts);
     int ret;
     if (flags & AVSEEK_FLAG_BACKWARD) {
         flags &= ~AVSEEK_FLAG_BACKWARD;
@@ -2322,6 +2333,7 @@ AVInputFormat ff_mpegts_demuxer = {
     .read_timestamp = mpegts_get_dts,
     .flags          = AVFMT_SHOW_IDS | AVFMT_TS_DISCONT,
 #ifdef USE_SYNCPOINT_SEARCH
+    .read_seek      = read_seek,
     .read_seek2     = read_seek2,
 #endif
 };
@@ -2336,6 +2348,7 @@ AVInputFormat ff_mpegtsraw_demuxer = {
     .read_timestamp = mpegts_get_dts,
     .flags          = AVFMT_SHOW_IDS | AVFMT_TS_DISCONT,
 #ifdef USE_SYNCPOINT_SEARCH
+    .read_seek      = read_seek,
     .read_seek2     = read_seek2,
 #endif
     .priv_class     = &mpegtsraw_class,

@@ -26,6 +26,14 @@
 #undef NDEBUG
 #include <assert.h>
 
+#if ANDROID
+#include <android/log.h>
+
+#define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, "FFMPEG",  __VA_ARGS__);
+#else
+#define LOGD(...)
+#endif
+
 /*********************************************/
 /* demux code */
 
