@@ -788,10 +788,11 @@ static int hls_read_seek(AVFormatContext *s, int stream_index,
 
     LOGD("hls_read_seek ts %lld seek ts %lld", timestamp, c->seek_timestamp);
 
-    if (s->duration < c->seek_timestamp) {
-        c->seek_timestamp = AV_NOPTS_VALUE;
-        return AVERROR(EIO);
-    }
+//    if (s->duration < c->seek_timestamp) {
+//        c->seek_timestamp = AV_NOPTS_VALUE;
+//        LOGD("hls_read_seek return by duration=%lld seek=%lld", s->duration, c->seek_timestamp);
+//        return AVERROR(EIO);
+//    }
 
     ret = AVERROR(EIO);
     for (i = 0; i < c->n_variants; i++) {
@@ -822,9 +823,13 @@ static int hls_read_seek(AVFormatContext *s, int stream_index,
             }
             pos += var->segments[j]->duration;
         }
-        if (ret)
+
+        if (ret) {
             c->seek_timestamp = AV_NOPTS_VALUE;
+        }
     }
+
+    LOGD("hls_read_seek ret %d", ret);
     return ret;
 }
 
