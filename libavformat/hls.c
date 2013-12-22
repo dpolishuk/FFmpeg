@@ -774,6 +774,12 @@ static int hls_read_seek(AVFormatContext *s, int stream_index,
     if ((flags & AVSEEK_FLAG_BYTE) || !c->variants[0]->finished)
         return AVERROR(ENOSYS);
 
+    if (s->duration < timestamp) {
+        LOGD("hls_read_seek return by duration=%lld seek=%lld", s->duration, timestamp);
+        c->seek_timestamp = AV_NOPTS_VALUE;
+        return AVERROR(EIO);
+    }
+
     c->seek_flags     = flags;
     c->seek_timestamp = stream_index < 0 ? timestamp :
                         av_rescale_rnd(timestamp, AV_TIME_BASE,
@@ -785,14 +791,7 @@ static int hls_read_seek(AVFormatContext *s, int stream_index,
                                AV_TIME_BASE, flags & AVSEEK_FLAG_BACKWARD ?
                                AV_ROUND_DOWN : AV_ROUND_UP);
 
-
     LOGD("hls_read_seek ts %lld seek ts %lld", timestamp, c->seek_timestamp);
-
-//    if (s->duration < c->seek_timestamp) {
-//        c->seek_timestamp = AV_NOPTS_VALUE;
-//        LOGD("hls_read_seek return by duration=%lld seek=%lld", s->duration, c->seek_timestamp);
-//        return AVERROR(EIO);
-//    }
 
     ret = AVERROR(EIO);
     for (i = 0; i < c->n_variants; i++) {
