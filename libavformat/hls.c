@@ -354,14 +354,13 @@ static int open_input(HLSContext *c, struct variant *var)
     int ret;
     struct segment *seg = var->segments[var->cur_seq_no - var->start_seq_no];
 
-    LOGD("open_input url: %s", seg->url);
-
     // broker prior HTTP options that should be consistent across requests
     av_dict_set(&opts, "user-agent", c->user_agent, 0);
     av_dict_set(&opts, "cookies", c->cookies, 0);
     av_dict_set(&opts, "seekable", "0", 0);
 
     if (seg->key_type == KEY_NONE) {
+        LOGD("open_input url: %s", seg->url);
         ret = ffurl_open(&var->input, seg->url, AVIO_FLAG_READ,
                           &var->parent->interrupt_callback, &opts);
         goto cleanup;
@@ -462,12 +461,19 @@ reload:
         }
 
         ret = open_input(c, v);
-        if (ret < 0)
-            return ret;
+        if (ret < 0) {
+          return ret;
+        } else {
+          LOGD("Connected url %s", v->url);
+        }
     }
     ret = ffurl_read(v->input, buf, buf_size);
-    if (ret > 0)
+    if (ret > 0) {
         return ret;
+    } else {
+      LOGD("Cannot read url %s", v->url);
+    }
+
     ffurl_close(v->input);
     v->input = NULL;
     v->cur_seq_no++;
