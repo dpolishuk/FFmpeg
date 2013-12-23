@@ -427,6 +427,8 @@ restart:
                                   v->segments[v->n_segments - 1]->duration :
                                   v->target_duration;
 
+        LOGD("Target duration: %lld Last segment duration: %lld", v->target_duration, v->segments[v->n_segments - 1]->duration);
+        LOGD("%lld = av_gettime(%lld) - v->last_load_time(%lld) >= reload_interval(%lld)", av_gettime() - v->last_load_time, av_gettime(), v->last_load_time, reload_interval);
 reload:
         if (!v->finished &&
             av_gettime() - v->last_load_time >= reload_interval) {
@@ -436,8 +438,11 @@ reload:
              * there's still no more segments), switch to a reload
              * interval of half the target duration. */
             reload_interval = v->target_duration / 2;
+            LOGD("SEEK reload_interval: %lld", reload_interval);
         }
         if (v->cur_seq_no < v->start_seq_no) {
+          LOGD("skipping %d segments ahead, expired from playlists",
+               v->start_seq_no - v->cur_seq_no);
             av_log(NULL, AV_LOG_WARNING,
                    "skipping %d segments ahead, expired from playlists\n",
                    v->start_seq_no - v->cur_seq_no);
@@ -452,6 +457,7 @@ reload:
                 usleep(100*1000);
             }
             /* Enough time has elapsed since the last reload */
+            LOGD("SEEK goto Reload");
             goto reload;
         }
 
@@ -483,6 +489,8 @@ reload:
                v->index);
         return AVERROR_EOF;
     }
+
+    LOGD("SEEK goto Restart");
     goto restart;
 }
 

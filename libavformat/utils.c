@@ -51,6 +51,14 @@
 #undef NDEBUG
 #include <assert.h>
 
+#if ANDROID
+#include <android/log.h>
+
+#define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, "FFMPEG",  __VA_ARGS__);
+#else
+#define LOGD(...)
+#endif
+
 /**
  * @file
  * various utility functions for use within FFmpeg
@@ -1923,6 +1931,8 @@ static int seek_frame_internal(AVFormatContext *s, int stream_index,
     AV_NOWARN_DEPRECATED(
     if (s->iformat->read_seek) {
         ff_read_frame_flush(s);
+
+        LOGD("SEEK iformat->read_seek %lld", timestamp);
         ret = s->iformat->read_seek(s, stream_index, timestamp, flags);
     } else
         ret = -1;
@@ -1932,9 +1942,11 @@ static int seek_frame_internal(AVFormatContext *s, int stream_index,
     }
 
     if (s->iformat->read_timestamp && !(s->iformat->flags & AVFMT_NOBINSEARCH)) {
+        LOGD("SEEK iformat->read_timestamp %lld", timestamp);
         ff_read_frame_flush(s);
         return ff_seek_frame_binary(s, stream_index, timestamp, flags);
     } else if (!(s->iformat->flags & AVFMT_NOGENSEARCH)) {
+        LOGD("SEEK s->iformat->flags & AVFMT_NOGENSEARCH %lld", timestamp);
         ff_read_frame_flush(s);
         return seek_frame_generic(s, stream_index, timestamp, flags);
     }

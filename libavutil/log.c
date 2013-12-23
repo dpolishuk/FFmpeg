@@ -29,6 +29,16 @@
 #include "avutil.h"
 #include "log.h"
 
+#include <unistd.h>
+
+#if ANDROID
+#include <android/log.h>
+
+#define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, "FFMPEG",  __VA_ARGS__);
+#else
+#define LOGD(...)
+#endif
+
 static int av_log_level = AV_LOG_INFO;
 static int flags;
 
@@ -123,15 +133,20 @@ void av_log_default_callback(void* ptr, int level, const char* fmt, va_list vl)
     char line[1024];
     static int is_atty;
 
+#if ANDROID
     if (level > av_log_level)
         return;
     av_log_format_line(ptr, level, fmt, vl, line, sizeof(line), &print_prefix);
+#endif
 
 #if HAVE_ISATTY
     if (!is_atty)
         is_atty = isatty(2) ? 1 : -1;
 #endif
 
+#if ANDROID
+    LOGD(fmt, vl);
+#else
 #undef fprintf
     if (print_prefix && (flags & AV_LOG_SKIP_REPEATED) && !strcmp(line, prev)){
         count++;
@@ -146,6 +161,8 @@ void av_log_default_callback(void* ptr, int level, const char* fmt, va_list vl)
     strcpy(prev, line);
     sanitize(line);
     colored_fputs(av_clip(level >> 3, 0, 6), line);
+#endif
+
 }
 
 static void (*av_log_callback)(void*, int, const char*, va_list) =

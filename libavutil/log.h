@@ -164,11 +164,11 @@ void av_log_format_line(void *ptr, int level, const char *fmt, va_list vl,
  * Useful to print debug messages that shouldn't get compiled in normally.
  */
 
-#ifdef DEBUG
+//#ifdef DEBUG
 #    define av_dlog(pctx, ...) av_log(pctx, AV_LOG_DEBUG, __VA_ARGS__)
-#else
-#    define av_dlog(pctx, ...) do { if (0) av_log(pctx, AV_LOG_DEBUG, __VA_ARGS__); } while (0)
-#endif
+//#else
+//#    define av_dlog(pctx, ...) do { if (0) av_log(pctx, AV_LOG_DEBUG, __VA_ARGS__); } while (0)
+//#endif
 
 /**
  * Skip repeated messages, this requires the user app to use av_log() instead of
