@@ -40,6 +40,8 @@
 #include <android/log.h>
 
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, "FFMPEG",  __VA_ARGS__);
+#else
+#define LOGD(...)
 #endif
 
 #define INITIAL_BUFFER_SIZE 32768

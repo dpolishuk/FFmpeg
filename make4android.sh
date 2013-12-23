@@ -14,6 +14,7 @@ libavformat/*.o \
 libswresample/*.o \
 libswresample/arm/*.o \
 libswscale/*.o \
+libswscale/arm/*.o \
 compat/*.o \
 -o libffmpeg.so \
 && arm-linux-androideabi-strip libffmpeg.so
