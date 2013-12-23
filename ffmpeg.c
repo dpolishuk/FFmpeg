@@ -823,17 +823,11 @@ static void do_video_out(AVFormatContext *s,
 
     format_video_sync = video_sync_method;
     if (format_video_sync == VSYNC_AUTO) {
-        if(!strcmp(s->oformat->name, "avi")) {
-            format_video_sync = VSYNC_VFR;
-        } else
-            format_video_sync = (s->oformat->flags & AVFMT_VARIABLE_FPS) ? ((s->oformat->flags & AVFMT_NOTIMESTAMPS) ? VSYNC_PASSTHROUGH : VSYNC_VFR) : VSYNC_CFR;
+        format_video_sync = (s->oformat->flags & AVFMT_VARIABLE_FPS) ? ((s->oformat->flags & AVFMT_NOTIMESTAMPS) ? VSYNC_PASSTHROUGH : VSYNC_VFR) : VSYNC_CFR;
         if (   ist
             && format_video_sync == VSYNC_CFR
             && input_files[ist->file_index]->ctx->nb_streams == 1
             && input_files[ist->file_index]->input_ts_offset == 0) {
-            format_video_sync = VSYNC_VSCFR;
-        }
-        if (format_video_sync == VSYNC_CFR && copy_ts) {
             format_video_sync = VSYNC_VSCFR;
         }
     }

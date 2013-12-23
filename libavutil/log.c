@@ -40,6 +40,10 @@
 #include "internal.h"
 #include "log.h"
 
+#if ANDROID
+#include <android/log.h>
+#endif
+
 #if HAVE_PTHREADS
 #include <pthread.h>
 static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -250,6 +254,10 @@ void av_log_default_callback(void* ptr, int level, const char* fmt, va_list vl)
         is_atty = isatty(2) ? 1 : -1;
 #endif
 
+#if ANDROID
+    __android_log_write(ANDROID_LOG_ERROR, "FFMPEG", line);
+#else
+
     if (print_prefix && (flags & AV_LOG_SKIP_REPEATED) && !strcmp(line, prev) &&
         *line && line[strlen(line) - 1] != '\r'){
         count++;
@@ -270,6 +278,8 @@ void av_log_default_callback(void* ptr, int level, const char* fmt, va_list vl)
     colored_fputs(av_clip(level >> 3, 0, 6), part[2].str);
 end:
     av_bprint_finalize(part+2, NULL);
+#endif
+
 #if HAVE_PTHREADS
     pthread_mutex_unlock(&mutex);
 #endif
