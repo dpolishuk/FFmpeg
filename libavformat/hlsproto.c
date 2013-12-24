@@ -26,13 +26,20 @@
  */
 
 #include "libavutil/avstring.h"
-// #include "libavutil/time.h"
+#include "libavutil/time.h"
 #include "avformat.h"
 #include "internal.h"
 #include "url.h"
 #include "version.h"
 
-#include <unistd.h>
+
+#if ANDROID
+#include <android/log.h>
+
+#define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, "FFMPEG-Proto",  __VA_ARGS__);
+#else
+#define LOGD(...)
+#endif
 
 #if ANDROID
 #include <android/log.h>
@@ -81,7 +88,7 @@ typedef struct HLSContext {
 static int read_chomp_line(AVIOContext *s, char *buf, int maxlen)
 {
     int len = ff_get_line(s, buf, maxlen);
-    while (len > 0 && isspace(buf[len - 1]))
+    while (len > 0 && av_isspace(buf[len - 1]))
         buf[--len] = '\0';
     return len;
 }
@@ -307,7 +314,7 @@ retry:
         while (av_gettime() - s->last_load_time < reload_interval) {
             if (ff_check_interrupt(&h->interrupt_callback))
                 return AVERROR_EXIT;
-            usleep(100*1000);
+            av_usleep(100*1000);
         }
         goto retry;
     }
@@ -324,17 +331,6 @@ retry:
     }
     goto start;
 }
-
-#if FF_API_APPLEHTTP_PROTO
-URLProtocol ff_applehttp_protocol = {
-    .name           = "applehttp",
-    .url_open       = hls_open,
-    .url_read       = hls_read,
-    .url_close      = hls_close,
-    .flags          = URL_PROTOCOL_FLAG_NESTED_SCHEME,
-    .priv_data_size = sizeof(HLSContext),
-};
-#endif
 
 URLProtocol ff_hls_protocol = {
     .name           = "hls",

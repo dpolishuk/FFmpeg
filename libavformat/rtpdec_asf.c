@@ -168,7 +168,8 @@ struct PayloadContext {
 static int asfrtp_parse_packet(AVFormatContext *s, PayloadContext *asf,
                                AVStream *st, AVPacket *pkt,
                                uint32_t *timestamp,
-                               const uint8_t *buf, int len, int flags)
+                               const uint8_t *buf, int len, uint16_t seq,
+                               int flags)
 {
     AVIOContext *pb = &asf->pb;
     int res, mflags, len_off;
@@ -238,14 +239,11 @@ static int asfrtp_parse_packet(AVFormatContext *s, PayloadContext *asf,
 
                 int cur_len = start_off + len_off - off;
                 int prev_len = out_len;
-                void *newmem;
                 out_len += cur_len;
                 if (FFMIN(cur_len, len - off) < 0)
                     return -1;
-                newmem = av_realloc(asf->buf, out_len);
-                if (!newmem)
-                    return -1;
-                asf->buf = newmem;
+                if ((res = av_reallocp(&asf->buf, out_len)) < 0)
+                    return res;
                 memcpy(asf->buf + prev_len, buf + off,
                        FFMIN(cur_len, len - off));
                 avio_skip(pb, cur_len);
@@ -298,7 +296,7 @@ static void asfrtp_free_context(PayloadContext *asf)
 RTPDynamicProtocolHandler ff_ms_rtp_ ## n ## _handler = { \
     .enc_name         = s, \
     .codec_type       = t, \
-    .codec_id         = CODEC_ID_NONE, \
+    .codec_id         = AV_CODEC_ID_NONE, \
     .parse_sdp_a_line = asfrtp_parse_sdp_line, \
     .alloc            = asfrtp_new_context, \
     .free             = asfrtp_free_context, \

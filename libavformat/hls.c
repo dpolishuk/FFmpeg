@@ -30,13 +30,11 @@
 #include "libavutil/mathematics.h"
 #include "libavutil/opt.h"
 #include "libavutil/dict.h"
-//#include "libavutil/time.h"
+#include "libavutil/time.h"
 #include "avformat.h"
 #include "internal.h"
 #include "avio_internal.h"
 #include "url.h"
-
-#include <unistd.h>
 
 #if ANDROID
 #include <android/log.h>
@@ -115,12 +113,13 @@ typedef struct HLSContext {
     AVIOInterruptCB *interrupt_callback;
     char *user_agent;                    ///< holds HTTP user agent set as an AVOption to the HTTP protocol context
     char *cookies;                       ///< holds HTTP cookie values set in either the initial response or as an AVOption to the HTTP protocol context
+    char *headers;                       ///< holds HTTP headers set as an AVOption to the HTTP protocol context
 } HLSContext;
 
 static int read_chomp_line(AVIOContext *s, char *buf, int maxlen)
 {
     int len = ff_get_line(s, buf, maxlen);
-    while (len > 0 && isspace(buf[len - 1]))
+    while (len > 0 && av_isspace(buf[len - 1]))
         buf[--len] = '\0';
     return len;
 }
@@ -225,6 +224,7 @@ static int parse_playlist(HLSContext *c, const char *url,
     char line[MAX_URL_SIZE];
     const char *ptr;
     int close_in = 0;
+    uint8_t *new_url = NULL;
 
     if (!in) {
         AVDictionary *opts = NULL;
@@ -235,6 +235,7 @@ static int parse_playlist(HLSContext *c, const char *url,
         // broker prior HTTP options that should be consistent across requests
         av_dict_set(&opts, "user-agent", c->user_agent, 0);
         av_dict_set(&opts, "cookies", c->cookies, 0);
+        av_dict_set(&opts, "headers", c->headers, 0);
 
         ret = avio_open2(&in, url, AVIO_FLAG_READ,
                          c->interrupt_callback, &opts);
@@ -242,6 +243,9 @@ static int parse_playlist(HLSContext *c, const char *url,
         if (ret < 0)
             return ret;
     }
+
+    if (av_opt_get(in, "location", AV_OPT_SEARCH_CHILDREN, &new_url) >= 0)
+        url = new_url;
 
     read_chomp_line(in, line, sizeof(line));
     if (strcmp(line, "#EXTM3U")) {
@@ -343,6 +347,7 @@ static int parse_playlist(HLSContext *c, const char *url,
         var->last_load_time = av_gettime();
 
 fail:
+    av_free(new_url);
     if (close_in)
         avio_close(in);
     return ret;
@@ -354,13 +359,15 @@ static int open_input(HLSContext *c, struct variant *var)
     int ret;
     struct segment *seg = var->segments[var->cur_seq_no - var->start_seq_no];
 
+    LOGD("open_input url: %s", seg->url);
+
     // broker prior HTTP options that should be consistent across requests
     av_dict_set(&opts, "user-agent", c->user_agent, 0);
     av_dict_set(&opts, "cookies", c->cookies, 0);
+    av_dict_set(&opts, "headers", c->headers, 0);
     av_dict_set(&opts, "seekable", "0", 0);
 
     if (seg->key_type == KEY_NONE) {
-        LOGD("open_input url: %s", seg->url);
         ret = ffurl_open(&var->input, seg->url, AVIO_FLAG_READ,
                           &var->parent->interrupt_callback, &opts);
         goto cleanup;
@@ -437,7 +444,6 @@ reload:
              * there's still no more segments), switch to a reload
              * interval of half the target duration. */
             reload_interval = v->target_duration / 2;
-            LOGD("SEEK reload_interval: %lld", reload_interval);
         }
         if (v->cur_seq_no < v->start_seq_no) {
           LOGD("skipping %d segments ahead, expired from playlists",
@@ -453,7 +459,7 @@ reload:
             while (av_gettime() - v->last_load_time < reload_interval) {
                 if (ff_check_interrupt(c->interrupt_callback))
                     return AVERROR_EXIT;
-                usleep(100*1000);
+                av_usleep(100*1000);
             }
             /* Enough time has elapsed since the last reload */
             LOGD("SEEK goto Reload");
@@ -461,19 +467,12 @@ reload:
         }
 
         ret = open_input(c, v);
-        if (ret < 0) {
-          return ret;
-        } else {
-          LOGD("Connected url %s", v->url);
-        }
+        if (ret < 0)
+            return ret;
     }
     ret = ffurl_read(v->input, buf, buf_size);
-    if (ret > 0) {
+    if (ret > 0)
         return ret;
-    } else {
-      LOGD("Cannot read url %s", v->url);
-    }
-
     ffurl_close(v->input);
     v->input = NULL;
     v->cur_seq_no++;
@@ -521,6 +520,12 @@ static int hls_read_header(AVFormatContext *s)
         av_opt_get(u->priv_data, "cookies", 0, (uint8_t**)&(c->cookies));
         if (c->cookies && !strlen(c->cookies))
             av_freep(&c->cookies);
+
+        // get the previous headers & set back to null if string size is zero
+        av_freep(&c->headers);
+        av_opt_get(u->priv_data, "headers", 0, (uint8_t**)&(c->headers));
+        if (c->headers && !strlen(c->headers))
+            av_freep(&c->headers);
     }
 
     if ((ret = parse_playlist(c, s->filename, NULL, s->pb)) < 0)
@@ -740,7 +745,8 @@ start:
         /* Check if this stream still is on an earlier segment number, or
          * has the packet with the lowest dts */
         if (var->pkt.data) {
-            struct variant *minvar = c->variants[minvariant];
+            struct variant *minvar = minvariant < 0 ?
+                                     NULL : c->variants[minvariant];
             if (minvariant < 0 || var->cur_seq_no < minvar->cur_seq_no) {
                 minvariant = i;
             } else if (var->cur_seq_no == minvar->cur_seq_no) {
@@ -796,8 +802,14 @@ static int hls_read_seek(AVFormatContext *s, int stream_index,
     int i, j, ret;
 
 
-    if ((flags & AVSEEK_FLAG_BYTE) || !c->variants[0]->finished) {
+    if ((flags & AVSEEK_FLAG_BYTE) || !c->variants[0]->finished)
         return AVERROR(ENOSYS);
+    }
+
+    if (s->duration < timestamp) {
+        LOGD("hls_read_seek return by duration=%lld seek=%lld", s->duration, timestamp);
+        c->seek_timestamp = AV_NOPTS_VALUE;
+        return AVERROR(EIO);
     }
 
     if (s->duration < timestamp) {
@@ -817,7 +829,7 @@ static int hls_read_seek(AVFormatContext *s, int stream_index,
                                AV_TIME_BASE, flags & AVSEEK_FLAG_BACKWARD ?
                                AV_ROUND_DOWN : AV_ROUND_UP);
 
-    LOGD("HLS hls_read_seek ts %lld seek ts %lld", timestamp, c->seek_timestamp);
+    LOGD("hls_read_seek ts %lld seek ts %lld", timestamp, c->seek_timestamp);
 
     ret = AVERROR(EIO);
     for (i = 0; i < c->n_variants; i++) {
