@@ -34,14 +34,33 @@ FFMPEG_FLAGS="--prefix=/tmp/ffmpeg/build \
   --disable-filters \
   --disable-devices \
   --disable-everything \
-  --enable-protocols  \
-  --enable-parsers \
+  --enable-protocol=http \
+  --enable-protocol=httpproxy \
+  --enable-protocol=https \
+  --enable-protocol=file \
+  --enable-parser=aac \
+  --enable-parser=aac_latm \
+  --enable-parser=ac3 \
+  --enable-parser=h264 \
+  --enable-parser=mpeg4video \
+  --enable-parser=mpegaudio \
+  --enable-parser=mpegvideo \
   --enable-demuxers \
   --disable-demuxer=sbg \
-  --enable-decoders \
-  --enable-bsfs \
+  --enable-decoder=aac \
+  --enable-decoder=aac_latm \
+  --enable-decoder=ac3 \
+  --enable-decoder=mpeg2_crystalhd \
+  --enable-decoder=mpeg2video \
+  --enable-decoder=mpeg4_crystalhd \
+  --enable-decoder=mpeg4 \
+  --enable-decoder=mpegvideo \
+  --enable-decoder=h264_crystalhd \
+  --enable-decoder=h264 \
+  --enable-bsf=h264_mp4toannexb \
+  --enable-bsf=aac_adtstoasc \
   --enable-network \
-  --enable-swscale  \
+  --disable-swscale  \
   --enable-asm \
   --enable-version3"
 
