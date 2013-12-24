@@ -802,14 +802,8 @@ static int hls_read_seek(AVFormatContext *s, int stream_index,
     int i, j, ret;
 
 
-    if ((flags & AVSEEK_FLAG_BYTE) || !c->variants[0]->finished)
+    if ((flags & AVSEEK_FLAG_BYTE) || !c->variants[0]->finished) {
         return AVERROR(ENOSYS);
-    }
-
-    if (s->duration < timestamp) {
-        LOGD("hls_read_seek return by duration=%lld seek=%lld", s->duration, timestamp);
-        c->seek_timestamp = AV_NOPTS_VALUE;
-        return AVERROR(EIO);
     }
 
     if (s->duration < timestamp) {
