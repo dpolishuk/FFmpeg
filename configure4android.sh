@@ -6,8 +6,13 @@ export LD=arm-linux-androideabi-ld
 export AR=arm-linux-androideabi-ar
 
 CFLAGS="-DHAVE_ANDROID -llog -O3 -Wall \
-  -DANDROID -DDEBUG"
-  
+  -DANDROID -DNDEBUG -pipe -mthumb -fpic -fasm \
+  -finline-limit=300 -ffast-math \
+  -fstrict-aliasing -Werror=strict-aliasing \
+  -fmodulo-sched -fmodulo-sched-allow-regmoves \
+  -Wno-psabi -Wa,--noexecstack"
+
+EXTRA_CFLAGS="-march=armv7-a -mfpu=neon -mfloat-abi=softfp -mvectorize-with-neon-quad"
 EXTRA_LDFLAGS="-Wl,--fix-cortex-a8 -llog"
 
 FFMPEG_FLAGS="--prefix=/tmp/ffmpeg/build \
